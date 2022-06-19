@@ -317,11 +317,16 @@ def main(itime):
     #   levels 0 (L1)   - surfaces (lnsp & z)
     #   levels 1 (L136) - bottom - 1
     #   levels 2 (L137) - bottom
+    #
+    # Sigma coefficients hyam(i) & hybm(i) are given on
+    #   L1 (TOA) - L137(8) (near-surface) model levels
     input_era5_ml = './era5/era5_200x_ml_4x4deg/era5_200x_ml_4x4deg.nc'
     longitude = read_forcing('longitude', input_era5_ml)
     latitude = read_forcing('latitude', input_era5_ml)
     hyai = read_forcing('hyai', input_era5_ml)[-3:]
     hybi = read_forcing('hybi', input_era5_ml)[-3:]
+    hyam = read_forcing('hyam', input_era5_ml)[-2:]   # L136-L137
+    hybm = read_forcing('hybm', input_era5_ml)[-2:]   # L136-L137
 
     lnsp = read_forcing('lnsp', input_era5_ml)[..., 0, itime]
     ubot = read_forcing('u', input_era5_ml)[..., 1, itime]   # L136
@@ -352,13 +357,14 @@ def main(itime):
 
     sp = np.exp(lnsp)
     ph = get_press_levs(sp, hyai, hybi)
-    zbot = compute_z_level(t, q, ph)
+    pf = get_press_levs(sp, hyam, hybm)
+    zbot = compute_z_level(t, q, ph)   # L136
 
     # air density
-    rbot = (ct.RGAS / ct.MWDAIR * tbot[...] / ph[:, :, 1])   # L136
+    rbot = (ct.RGAS / ct.MWDAIR * tbot[...] / pf[:, :, 0])   # L136
 
     # potential temperature
-    thbot = (tbot[...] * (ct.P0 / ph[:, :, 1])**ct.CAPPA)    # L136
+    thbot = (tbot[...] * (ct.P0 / pf[:, :, 0])**ct.CAPPA)    # L136
 
     mask_nan = np.isnan(ts)
     mask_ice = np.zeros(siconc.shape)
