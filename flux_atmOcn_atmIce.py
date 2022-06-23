@@ -1,6 +1,9 @@
+import os
+import netCDF4
 import numpy as np
 import constants as ct
 from utilities import *
+import matplotlib.pyplot as plt
 
 
 def flux_atmIce(mask, rbot, zbot, ubot, vbot, qbot, tbot, thbot, ts):
@@ -28,7 +31,11 @@ def flux_atmIce(mask, rbot, zbot, ubot, vbot, qbot, tbot, thbot, ts):
         qref (:obj:`ndarray`): diag:  2m ref humidity (kg/kg)
 
     Reference:
-        cesm v.1.0.5: models/csm_share/shr/shr_flux_mod.F90
+        - Large, W. G., & Pond, S. (1981). Open Ocean Momentum Flux Measurements in Moderate to Strong Winds,
+        Journal of Physical Oceanography, 11(3), pp. 324-336
+        - Large, W. G., & Pond, S. (1982). Sensible and Latent Heat Flux Measurements over the Ocean,
+        Journal of Physical Oceanography, 12(5), 464-482.
+        - https://svn-ccsm-release.cgd.ucar.edu/model_versions/cesm1_0_5/models/csm_share/shr/shr_flux_mod.F90
     """
 
     vmag = np.maximum(ct.UMIN_I, np.sqrt((ubot[...])**2 + (vbot[...])**2))
@@ -175,7 +182,11 @@ def flux_atmOcn(mask, rbot, zbot, ubot, vbot, qbot, tbot, thbot, us, vs, ts):
         ssq_sv  (:obj:`ndarray`): diag: sea surface humidity  (kg/kg)
 
     Reference:
-        cesm v.1.0.5: models/csm_share/shr/shr_flux_mod.F90
+        - Large, W. G., & Pond, S. (1981). Open Ocean Momentum Flux Measurements in Moderate to Strong Winds,
+        Journal of Physical Oceanography, 11(3), pp. 324-336
+        - Large, W. G., & Pond, S. (1982). Sensible and Latent Heat Flux Measurements over the Ocean,
+        Journal of Physical Oceanography, 12(5), 464-482.
+        - https://svn-ccsm-release.cgd.ucar.edu/model_versions/cesm1_0_5/models/csm_share/shr/shr_flux_mod.F90
     """
 
     al2 = np.log(ct.ZREF / ct.ZTREF)
@@ -306,12 +317,18 @@ def flux_atmOcn(mask, rbot, zbot, ubot, vbot, qbot, tbot, thbot, us, vs, ts):
 
 
 def main(itime):
-    import netCDF4
-    import matplotlib.pyplot as plt
 
     def read_forcing(var, file):
         with netCDF4.Dataset(file) as infile:
             return np.squeeze(infile[var][:].T)
+
+    def plot(ds, fname):
+        plt.figure(figsize=(10, 5))
+        cs = plt.pcolor(longitude, latitude,
+                        ds.T,
+                        shading='auto')
+        plt.colorbar(cs)
+        plt.savefig(f'{output_path}/{fname}.png')
 
     # Fields in the input file are defined on IFS model levels:
     #   levels 0 (L1)   - surfaces (lnsp & z)
@@ -320,7 +337,7 @@ def main(itime):
     #
     # Sigma coefficients hyam(i) & hybm(i) are given on
     #   L1 (TOA) - L137(8) (near-surface) model levels
-    input_era5_ml = './era5/era5_200x_ml_4x4deg/era5_200x_ml_4x4deg.nc'
+    input_era5_ml = './era5/era5_198x_ml_4x4deg/era5_198x_ml_4x4deg_monthly_mean.nc'
     longitude = read_forcing('longitude', input_era5_ml)
     latitude = read_forcing('latitude', input_era5_ml)
     hyai = read_forcing('hyai', input_era5_ml)[-3:]
@@ -336,9 +353,11 @@ def main(itime):
     qbot = q[..., 0]   # L136
     tbot = t[..., 0]   # L136
 
-    input_era5_sfc = './era5/era5_200x_sfc_4x4deg/era5_200x_sfc_4x4deg.nc'
+    input_era5_sfc = './era5/era5_198x_sfc_4x4deg/era5_198x_sfc_4x4deg_monthly_mean.nc'
     lsm = read_forcing('lsm', input_era5_sfc)[..., itime]
     siconc = read_forcing('siconc', input_era5_sfc)[..., itime]
+    sst = read_forcing('sst', input_era5_sfc)[..., itime]
+    tcc = read_forcing('tcc', input_era5_sfc)[..., itime]
 
     input_oras5 = './oras5/'
     # (degC) --> (K)
@@ -361,7 +380,7 @@ def main(itime):
     zbot = compute_z_level(t, q, ph)   # L136
 
     # air density
-    rbot = (ct.RGAS / ct.MWDAIR * tbot[...] / pf[:, :, 0])   # L136
+    rbot = ct.MWDAIR / ct.RGAS * pf[:, :, 0] / tbot[...]   # L136
 
     # potential temperature
     thbot = (tbot[...] * (ct.P0 / pf[:, :, 0])**ct.CAPPA)    # L136
@@ -386,14 +405,33 @@ def main(itime):
         dict(zip(('sen', 'lat', 'lwup', 'evap', 'taux', 'tauy', 'tref', 'qref'),
              flux_atmIce(mask_ice, rbot, zbot, ubot, vbot, qbot, tbot, thbot, ts)))
 
+    # Net LW radiation flux from sea surface
+    lwnet_ocn = net_lw_ocn(mask_ocn, latitude, qbot, sst, tbot, tcc)
+
+    # Downward LW radiation flux over sea-ice
+    lwdw_ice = dw_lw_ice(mask_ice, tbot, tcc)
+
+    # Net surface radiation flux (without short-wave)
+    qnet = lwnet_ocn\
+         + lwdw_ice + atmIce_fluxes['lwup']\
+         + atmIce_fluxes['sen'] + atmOcn_fluxes['sen']\
+         + atmIce_fluxes['lat'] + atmOcn_fluxes['lat']
+
+    dqir_dt, dqh_dt, dqe_dt = dqnetdt(mask_ocn, sp, rbot, sst, ubot, vbot, us, vs)
+
+    # ----------------------------------------------------------------
+
+    output_path = './output'
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
+
+    plot(lwnet_ocn, 'lwnet_ocn')
+    plot(lwdw_ice, 'lwdw_ice')
+    plot(qnet, 'qnet')
+    plot(-(dqir_dt + dqh_dt + dqe_dt), 'dqnet_dt')
+
     for fld in atmIce_fluxes:
-        plt.figure(figsize=(10, 5))
-        cs = plt.pcolor(longitude, latitude,
-                        (atmIce_fluxes[fld] + atmOcn_fluxes[fld]).T,
-                        shading='auto')
-        plt.colorbar(cs)
-        plt.title(fld)
-        plt.savefig(f'{fld}.png')
+        plot(atmIce_fluxes[fld] + atmOcn_fluxes[fld], fld)
 
 
 if __name__ == "__main__":

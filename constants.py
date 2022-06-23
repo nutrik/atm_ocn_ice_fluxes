@@ -74,3 +74,15 @@ LATVAP = 2.501e6
 
 # latent heat for surface ~ J/kg
 LTHEAT = LATICE + LATVAP
+
+# Bulk transfer coefficient for sensible heat
+CH = 1e-3
+
+# Bulk transfer coefficient for latent heat
+CE = 1.15e-3
+
+# Threshold value
+EPS2 = 1.0e-20
+
+# Surface emissivity (usually 0.97-0.98 for sea surface)
+EMISSIVITY = 1.
