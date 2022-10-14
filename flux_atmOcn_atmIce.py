@@ -322,10 +322,11 @@ def main(itime):
         with netCDF4.Dataset(file) as infile:
             return np.squeeze(infile[var][:].T)
 
-    def plot(ds, fname):
+    def plot(ds, fname, cmap=None, vmin=None, vmax=None):
         plt.figure(figsize=(10, 5))
         cs = plt.pcolor(longitude, latitude,
-                        ds.T,
+                        ds.T, cmap=cmap,
+                        vmin=vmin, vmax=vmax,
                         shading='auto')
         plt.colorbar(cs)
         plt.savefig(f'{output_path}/{fname}.png')
@@ -358,6 +359,8 @@ def main(itime):
     siconc = read_forcing('siconc', input_era5_sfc)[..., itime]
     sst = read_forcing('sst', input_era5_sfc)[..., itime]
     tcc = read_forcing('tcc', input_era5_sfc)[..., itime]
+    swr_net = read_forcing('msnswrf', input_era5_sfc)[..., itime]
+    lwr_net = read_forcing('msnlwrf', input_era5_sfc)[..., itime]
 
     input_oras5 = './oras5/'
     # (degC) --> (K)
@@ -395,27 +398,28 @@ def main(itime):
 
     mask_ice[siconc > 0.] = 1
     mask_ocn[lsm == 0.] = 1
-    mask_ocn[siconc > 0.] = 0
+    mask_ocn_ice = mask_ocn.copy()
+    mask_ocn_ice[siconc > 0.] = 0
 
     atmOcn_fluxes =\
         dict(zip(('sen', 'lat', 'lwup', 'evap', 'taux', 'tauy', 'tref', 'qref', 'duu10n'),
-             flux_atmOcn(mask_ocn, rbot, zbot, ubot, vbot, qbot, tbot, thbot, us, vs, ts)))
+             flux_atmOcn(mask_ocn_ice, rbot, zbot, ubot, vbot, qbot, tbot, thbot, us, vs, ts)))
 
     atmIce_fluxes =\
         dict(zip(('sen', 'lat', 'lwup', 'evap', 'taux', 'tauy', 'tref', 'qref'),
              flux_atmIce(mask_ice, rbot, zbot, ubot, vbot, qbot, tbot, thbot, ts)))
 
     # Net LW radiation flux from sea surface
-    lwnet_ocn = net_lw_ocn(mask_ocn, latitude, qbot, sst, tbot, tcc)
+    lwnet_ocn = net_lw_ocn(mask_ocn_ice, latitude, qbot, sst, tbot, tcc)
 
     # Downward LW radiation flux over sea-ice
     lwdw_ice = dw_lw_ice(mask_ice, tbot, tcc)
 
     # Net surface radiation flux (without short-wave)
-    qnet = lwnet_ocn\
+    qnet = -(swr_net + lwnet_ocn\
          + lwdw_ice + atmIce_fluxes['lwup']\
          + atmIce_fluxes['sen'] + atmOcn_fluxes['sen']\
-         + atmIce_fluxes['lat'] + atmOcn_fluxes['lat']
+         + atmIce_fluxes['lat'] + atmOcn_fluxes['lat'])
 
     dqir_dt, dqh_dt, dqe_dt = dqnetdt(mask_ocn, sp, rbot, sst, ubot, vbot, us, vs)
 
@@ -425,10 +429,11 @@ def main(itime):
     if not os.path.exists(output_path):
         os.mkdir(output_path)
 
+    plot((swr_net + lwr_net) * mask_ocn, 'swr_lwr_net')
     plot(lwnet_ocn, 'lwnet_ocn')
     plot(lwdw_ice, 'lwdw_ice')
-    plot(qnet, 'qnet')
-    plot(-(dqir_dt + dqh_dt + dqe_dt), 'dqnet_dt')
+    plot(qnet, 'qnet', cmap='RdBu_r', vmin=-400, vmax=400)
+    plot(-(dqir_dt + dqh_dt + dqe_dt), 'dqnet_dt', vmin=0, vmax=70)
 
     for fld in atmIce_fluxes:
         plot(atmIce_fluxes[fld] + atmOcn_fluxes[fld], fld)
