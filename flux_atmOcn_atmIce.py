@@ -366,15 +366,15 @@ def main(itime):
     # (degC) --> (K)
     ts = read_forcing('votemper',
                       f'{input_oras5}'
-                      'votemper_control_monthly_highres_3D_200001_'
+                      f'votemper_control_monthly_highres_3D_20000{itime+1}_'
                       'CONS_v0.1_regrided_4x4deg.nc')[..., 0] + 273.15
     us = read_forcing('vozocrtx',
                       f'{input_oras5}'
-                      'vozocrtx_control_monthly_highres_3D_200001_'
+                      f'vozocrtx_control_monthly_highres_3D_20000{itime+1}_'
                       'CONS_v0.1_regrided_4x4deg.nc')[..., 0]
     vs = read_forcing('vomecrty',
                       f'{input_oras5}'
-                      'vomecrty_control_monthly_highres_3D_200001_'
+                      f'vomecrty_control_monthly_highres_3D_20000{itime+1}_'
                       'CONS_v0.1_regrided_4x4deg.nc')[..., 0]
 
     sp = np.exp(lnsp)
@@ -416,23 +416,28 @@ def main(itime):
     lwdw_ice = dw_lw_ice(mask_ice, tbot, tcc)
 
     # Net surface radiation flux (without short-wave)
-    qnet = -(swr_net + lwnet_ocn\
+    qnet = swr_net + lwnet_ocn\
          + lwdw_ice + atmIce_fluxes['lwup']\
          + atmIce_fluxes['sen'] + atmOcn_fluxes['sen']\
-         + atmIce_fluxes['lat'] + atmOcn_fluxes['lat'])
+         + atmIce_fluxes['lat'] + atmOcn_fluxes['lat']
 
     dqir_dt, dqh_dt, dqe_dt = dqnetdt(mask_ocn, sp, rbot, sst, ubot, vbot, us, vs)
 
     # ----------------------------------------------------------------
 
-    output_path = './output'
+    output_path = './output' 
     if not os.path.exists(output_path):
         os.mkdir(output_path)
 
-    plot((swr_net + lwr_net) * mask_ocn, 'swr_lwr_net')
+    plot(tbot - 273.15, 'tbot', cmap='RdBu_r', vmin=-50, vmax=50)
+    plot(np.where(ts - 273.15 < -1.8, -999, ts - 273.15),
+                  'sst_m18', cmap='RdBu_r', vmin=-50, vmax=50)   
+    plot(ts - 273.15, 'sst', cmap='RdBu_r', vmin=-50, vmax=50)    
+    plot((swr_net + lwr_net) * mask_ocn, 'swr_lwr_net_era5',
+         cmap='RdBu_r', vmin=-200, vmax=200)
     plot(lwnet_ocn, 'lwnet_ocn')
-    plot(lwdw_ice, 'lwdw_ice')
-    plot(qnet, 'qnet', cmap='RdBu_r', vmin=-400, vmax=400)
+    plot(atmIce_fluxes['lwup'] + lwdw_ice, 'lwnet_ice', cmap='RdBu_r', vmin=-100, vmax=100)
+    plot(qnet, 'qnet', cmap='RdBu_r', vmin=-200, vmax=200)
     plot(-(dqir_dt + dqh_dt + dqe_dt), 'dqnet_dt', vmin=0, vmax=70)
 
     for fld in atmIce_fluxes:
@@ -440,4 +445,5 @@ def main(itime):
 
 
 if __name__ == "__main__":
-    main(0)
+    main(5)
+
