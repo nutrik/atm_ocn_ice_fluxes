@@ -146,7 +146,7 @@ def flux_atmIce(mask, rbot, zbot, ubot, vbot, qbot, tbot, thbot, ts):
     tref = (ts[...] + (tbot[...] - ts[...]) * fac[...]) * mask[...]
     qref = (qbot[...] - delq[...] * fac[...]) * mask[...]
 
-    return (sen, lat, lwup, evap, taux, tauy, tref, qref)
+    return (sen, lat, lwup, evap, taux, tauy, tref, qref, ustar, tstar, qstar)
 
 
 def flux_atmOcn(mask, rbot, zbot, ubot, vbot, qbot, tbot, thbot, us, vs, ts):
@@ -313,7 +313,50 @@ def flux_atmOcn(mask, rbot, zbot, ubot, vbot, qbot, tbot, thbot, us, vs, ts):
     # 10m wind speed squared
     duu10n = u10n[...] * u10n[...] * mask[...]
 
-    return (sen, lat, lwup, evap, taux, tauy, tref, qref, duu10n)
+    return (sen, lat, lwup, evap, taux, tauy, tref, qref, duu10n, ustar, tstar, qstar)
+
+
+def flux_atmOcnIce(mask, ps, qbot, rbot, ubot, vbot, tbot, us, vs, ts):
+    """Calculates bulk net heat flux
+
+    Arguments:
+        mask (:obj:`ndarray`): ocn domain mask       0 <=> out of domain
+        ps   (:obj:`ndarray`): surface pressure (Pa)
+        qbot (:obj:`ndarray`): atm specific humidity (kg/kg)
+        rbot (:obj:`ndarray`): atm density at full model level (kg/m^3)
+        tbot (:obj:`ndarray`): temperature at full model level (K)
+        ubot (:obj:`ndarray`): atm u wind            (m/s)
+        vbot (:obj:`ndarray`): atm v wind            (m/s)
+        qbot (:obj:`ndarray`): atm specific humidity (kg/kg)
+        tbot (:obj:`ndarray`): atm T                 (K)
+        us   (:obj:`ndarray`): ocn u-velocity        (m/s)
+        vs   (:obj:`ndarray`): ocn v-velocity        (m/s)
+        ts   (:obj:`ndarray`): surface temperature   (K)
+
+    Returns:
+        tuple(:obj:`ndarray`, :obj:`ndarray`, :obj:`ndarray`) 
+
+    Reference:
+        Barnier B., L. Siefridt, P. Marchesiello, (1995):
+        Thermal forcing for a global ocean circulation model
+        using a three-year climatology of ECMWF analyses,
+        Journal of Marine Systems, 6, p. 363-380.
+    """
+
+    vmag = np.maximum(ct.UMIN_O, np.sqrt((ubot[...] - us[...])**2
+                                         + (vbot[...] - vs[...])**2))
+
+    # long-wave radiation (IR)
+    qir = -ct.STEBOL * ts[...]**4 * mask[...]
+
+    # sensible heat flux
+    qh = rbot[...] * ct.CPDAIR * ct.CH * vmag[...] * (tbot[...] - ts[...]) * mask[...]
+
+    # latent heat flux
+    qe = -rbot[...] * ct.CE * ct.LATVAP * vmag[...] * (qsat_august_eqn(ps, ts)
+                                                       - qbot[...]) * mask[...]
+
+    return (qir, qh, qe)
 
 
 def main(itime):
@@ -361,20 +404,23 @@ def main(itime):
     tcc = read_forcing('tcc', input_era5_sfc)[..., itime]
     swr_net = read_forcing('msnswrf', input_era5_sfc)[..., itime]
     lwr_net = read_forcing('msnlwrf', input_era5_sfc)[..., itime]
+    lwr_dw = read_forcing('msdwlwrf', input_era5_sfc)[..., itime]
+    sshf_era5 = read_forcing('msshf', input_era5_sfc)[..., itime]
+    slhf_era5 = read_forcing('mslhf', input_era5_sfc)[..., itime]
 
     input_oras5 = './oras5/'
     # (degC) --> (K)
     ts = read_forcing('votemper',
                       f'{input_oras5}'
-                      f'votemper_control_monthly_highres_3D_20000{itime+1}_'
+                      f'votemper_control_monthly_highres_3D_19800{itime+1}_'
                       'CONS_v0.1_regrided_4x4deg.nc')[..., 0] + 273.15
     us = read_forcing('vozocrtx',
                       f'{input_oras5}'
-                      f'vozocrtx_control_monthly_highres_3D_20000{itime+1}_'
+                      f'vozocrtx_control_monthly_highres_3D_19800{itime+1}_'
                       'CONS_v0.1_regrided_4x4deg.nc')[..., 0]
     vs = read_forcing('vomecrty',
                       f'{input_oras5}'
-                      f'vomecrty_control_monthly_highres_3D_20000{itime+1}_'
+                      f'vomecrty_control_monthly_highres_3D_19800{itime+1}_'
                       'CONS_v0.1_regrided_4x4deg.nc')[..., 0]
 
     sp = np.exp(lnsp)
@@ -402,11 +448,13 @@ def main(itime):
     mask_ocn_ice[siconc > 0.] = 0
 
     atmOcn_fluxes =\
-        dict(zip(('sen', 'lat', 'lwup', 'evap', 'taux', 'tauy', 'tref', 'qref', 'duu10n'),
+        dict(zip(('sen', 'lat', 'lwup', 'evap', 'taux', 'tauy',
+                  'tref', 'qref', 'duu10n', 'ustar', 'tstar', 'qstar'),
              flux_atmOcn(mask_ocn_ice, rbot, zbot, ubot, vbot, qbot, tbot, thbot, us, vs, ts)))
 
     atmIce_fluxes =\
-        dict(zip(('sen', 'lat', 'lwup', 'evap', 'taux', 'tauy', 'tref', 'qref'),
+        dict(zip(('sen', 'lat', 'lwup', 'evap', 'taux', 'tauy',
+                  'tref', 'qref', 'ustar', 'tstar', 'qstar'),
              flux_atmIce(mask_ice, rbot, zbot, ubot, vbot, qbot, tbot, thbot, ts)))
 
     # Net LW radiation flux from sea surface
@@ -421,6 +469,9 @@ def main(itime):
          + atmIce_fluxes['sen'] + atmOcn_fluxes['sen']\
          + atmIce_fluxes['lat'] + atmOcn_fluxes['lat']
 
+    qir, qh, qe = flux_atmOcnIce(mask_ocn_ice, sp, qbot, rbot, ubot, vbot, tbot, us, vs, ts)
+    qnet_simple = swr_net + qir + lwr_dw + qh + qe 
+
     dqir_dt, dqh_dt, dqe_dt = dqnetdt(mask_ocn, sp, rbot, sst, ubot, vbot, us, vs)
 
     # ----------------------------------------------------------------
@@ -429,21 +480,43 @@ def main(itime):
     if not os.path.exists(output_path):
         os.mkdir(output_path)
 
+    mask_ocn[lsm != 0.] = np.nan
+
     plot(tbot - 273.15, 'tbot', cmap='RdBu_r', vmin=-50, vmax=50)
     plot(np.where(ts - 273.15 < -1.8, -999, ts - 273.15),
-                  'sst_m18', cmap='RdBu_r', vmin=-50, vmax=50)   
-    plot(ts - 273.15, 'sst', cmap='RdBu_r', vmin=-50, vmax=50)    
+                  'sst_m18', cmap='RdBu_r', vmin=-50, vmax=50)
+    plot(ts - 273.15, 'sst', cmap='RdBu_r', vmin=-50, vmax=50)
+    plot(zbot * mask_ocn, 'zbot_era5', cmap='viridis', vmin=15, vmax=35)
+
+    plot(atmOcn_fluxes['ustar'] * mask_ocn, 'ustar_ocn', cmap='viridis', vmin=0, vmax=0.5)
+    plot(atmOcn_fluxes['tstar'] * mask_ocn, 'tstar_ocn', cmap='viridis')
+    plot(atmOcn_fluxes['qstar'] * mask_ocn, 'qstar_ocn', cmap='viridis')
+
+    plot(lwr_net * mask_ocn, 'lwr_net_era5', cmap='RdBu_r', vmin=-100, vmax=100)
+    plot(swr_net * mask_ocn, 'swr_net_era5', cmap='viridis', vmin=0, vmax=300)
     plot((swr_net + lwr_net) * mask_ocn, 'swr_lwr_net_era5',
          cmap='RdBu_r', vmin=-200, vmax=200)
-    plot(lwnet_ocn, 'lwnet_ocn')
+
+    plot(slhf_era5 * mask_ocn, 'slhf_ocn_era5', cmap='viridis', vmin=-200, vmax=0)
+    plot(atmIce_fluxes['lat'] + atmOcn_fluxes['lat'] , 'slhf_ocn', cmap='viridis', vmin=-200, vmax=0)
+
+    plot(sshf_era5 * mask_ocn, 'sshf_ocn_era5', cmap='viridis', vmin=-200, vmax=0)
+    plot(atmIce_fluxes['sen'] + atmOcn_fluxes['sen'], 'sen_ocn', cmap='viridis', vmin=-200, vmax=0)
+
+    plot(lwnet_ocn, 'lwnet_ocn', cmap='RdBu_r', vmin=-100, vmax=100)
     plot(atmIce_fluxes['lwup'] + lwdw_ice, 'lwnet_ice', cmap='RdBu_r', vmin=-100, vmax=100)
-    plot(qnet, 'qnet', cmap='RdBu_r', vmin=-200, vmax=200)
-    plot(-(dqir_dt + dqh_dt + dqe_dt), 'dqnet_dt', vmin=0, vmax=70)
+
+    plot(qnet  * mask_ocn, 'qnet', cmap='RdBu_r', vmin=-200, vmax=200)
+    plot(-(dqir_dt + dqh_dt + dqe_dt) * mask_ocn, 'dqnet_dt', vmin=0, vmax=70)
+
+    plot(qnet_simple  * mask_ocn, 'qnet_simple', cmap='RdBu_r', vmin=-200, vmax=200)
+    plot(qh * mask_ocn, 'sen_simple', cmap='viridis', vmin=-200, vmax=0)
+    plot(qe * mask_ocn, 'slhf_simple', cmap='viridis', vmin=-200, vmax=0)
 
     for fld in atmIce_fluxes:
         plot(atmIce_fluxes[fld] + atmOcn_fluxes[fld], fld)
 
 
 if __name__ == "__main__":
-    main(5)
+    main(0)
 
