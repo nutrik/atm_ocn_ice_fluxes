@@ -469,7 +469,7 @@ def main(itime):
          + atmIce_fluxes['sen'] + atmOcn_fluxes['sen']\
          + atmIce_fluxes['lat'] + atmOcn_fluxes['lat']
 
-    qir, qh, qe = flux_atmOcnIce(mask_ocn_ice, sp, qbot, rbot, ubot, vbot, tbot, us, vs, ts)
+    qir, qh, qe = flux_atmOcnIce(mask_ocn, sp, qbot, rbot, ubot, vbot, tbot, us, vs, ts)
     qnet_simple = swr_net + qir + lwr_dw + qh + qe 
 
     dqir_dt, dqh_dt, dqe_dt = dqnetdt(mask_ocn, sp, rbot, sst, ubot, vbot, us, vs)
@@ -509,12 +509,13 @@ def main(itime):
     plot(qnet  * mask_ocn, 'qnet', cmap='RdBu_r', vmin=-200, vmax=200)
     plot(-(dqir_dt + dqh_dt + dqe_dt) * mask_ocn, 'dqnet_dt', vmin=0, vmax=70)
 
-    plot(qnet_simple  * mask_ocn, 'qnet_simple', cmap='RdBu_r', vmin=-200, vmax=200)
+    plot(qnet_simple * mask_ocn, 'qnet_simple', cmap='RdBu_r', vmin=-200, vmax=200)
+    plot(qir * mask_ocn, 'lwup_simple', cmap='viridis')
     plot(qh * mask_ocn, 'sen_simple', cmap='viridis', vmin=-200, vmax=0)
     plot(qe * mask_ocn, 'slhf_simple', cmap='viridis', vmin=-200, vmax=0)
 
-    for fld in atmIce_fluxes:
-        plot(atmIce_fluxes[fld] + atmOcn_fluxes[fld], fld)
+    #for fld in atmIce_fluxes:
+    #    plot(atmIce_fluxes[fld] + atmOcn_fluxes[fld], fld)
 
 
 if __name__ == "__main__":
