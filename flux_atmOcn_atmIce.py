@@ -328,7 +328,6 @@ def flux_atmOcnIce(mask, ps, qbot, rbot, ubot, vbot, tbot, us, vs, ts):
         ubot (:obj:`ndarray`): atm u wind            (m/s)
         vbot (:obj:`ndarray`): atm v wind            (m/s)
         qbot (:obj:`ndarray`): atm specific humidity (kg/kg)
-        tbot (:obj:`ndarray`): atm T                 (K)
         us   (:obj:`ndarray`): ocn u-velocity        (m/s)
         vs   (:obj:`ndarray`): ocn v-velocity        (m/s)
         ts   (:obj:`ndarray`): surface temperature   (K)
@@ -482,11 +481,22 @@ def main(itime):
 
     mask_ocn[lsm != 0.] = np.nan
 
+    plot(rbot * mask_ocn, 'rbot', cmap='viridis', vmin=1., vmax=1.5)
+    plot((thbot - 273.15) * mask_ocn, 'thbot', cmap='RdBu_r', vmin=-40, vmax=40)
+
     plot(tbot - 273.15, 'tbot', cmap='RdBu_r', vmin=-50, vmax=50)
     plot(np.where(ts - 273.15 < -1.8, -999, ts - 273.15),
-                  'sst_m18', cmap='RdBu_r', vmin=-50, vmax=50)
-    plot(ts - 273.15, 'sst', cmap='RdBu_r', vmin=-50, vmax=50)
+                  'sst_m18', cmap='RdBu_r', vmin=-30, vmax=30)
+    plot(ts - 273.15, 'sst', cmap='RdBu_r', vmin=-30, vmax=30)
     plot(zbot * mask_ocn, 'zbot_era5', cmap='viridis', vmin=15, vmax=35)
+
+    plot(ubot * mask_ocn, 'ubot', cmap='RdBu_r', vmin=-10, vmax=10)
+    plot(vbot * mask_ocn, 'vbot', cmap='RdBu_r', vmin=-10, vmax=10)
+    plot(us * mask_ocn, 'ssu', cmap='RdBu_r', vmin=-1, vmax=1)
+    plot(vs * mask_ocn, 'ssv', cmap='RdBu_r', vmin=-1, vmax=1)
+
+    plot(qbot * mask_ocn, 'qbot', cmap='viridis')
+    plot(mask_ocn_ice, 'mask_ocn_ice', cmap='viridis')
 
     plot(atmOcn_fluxes['ustar'] * mask_ocn, 'ustar_ocn', cmap='viridis', vmin=0, vmax=0.5)
     plot(atmOcn_fluxes['tstar'] * mask_ocn, 'tstar_ocn', cmap='viridis')
@@ -496,6 +506,11 @@ def main(itime):
     plot(swr_net * mask_ocn, 'swr_net_era5', cmap='viridis', vmin=0, vmax=300)
     plot((swr_net + lwr_net) * mask_ocn, 'swr_lwr_net_era5',
          cmap='RdBu_r', vmin=-200, vmax=200)
+
+    plot((sshf_era5 - atmIce_fluxes['sen'] - atmOcn_fluxes['sen']) * mask_ocn,
+         'sshf_diff', cmap='RdBu_r', vmin=-50, vmax=50)
+    plot((slhf_era5 - atmIce_fluxes['lat'] - atmOcn_fluxes['lat']) * mask_ocn, 
+         'slhf_diff', cmap='RdBu_r', vmin=-100, vmax=100)
 
     plot(slhf_era5 * mask_ocn, 'slhf_ocn_era5', cmap='viridis', vmin=-200, vmax=0)
     plot(atmIce_fluxes['lat'] + atmOcn_fluxes['lat'] , 'slhf_ocn', cmap='viridis', vmin=-200, vmax=0)
@@ -514,6 +529,7 @@ def main(itime):
     plot(qh * mask_ocn, 'sen_simple', cmap='viridis', vmin=-200, vmax=0)
     plot(qe * mask_ocn, 'slhf_simple', cmap='viridis', vmin=-200, vmax=0)
 
+    print(f"Global hflux mean: {np.nanmean(qnet  * mask_ocn)}")
     #for fld in atmIce_fluxes:
     #    plot(atmIce_fluxes[fld] + atmOcn_fluxes[fld], fld)
 
