@@ -30,7 +30,7 @@ RDAIR = RGAS / MWDAIR
 # water vapor gas constant ~ J/K/kg
 RWV = RGAS / MWWV
 
-# RWV/RDAIR - 1.0
+# Dry-air - water-vapor molecular mass ratio
 ZVIR = (RWV / RDAIR) - 1.0
 
 # specific heat of dry air   ~ J/kg/K
@@ -85,4 +85,23 @@ CE = 1.15e-3
 EPS2 = 1.0e-20
 
 # Surface emissivity (usually 0.97-0.98 for sea surface)
-EMISSIVITY = 1.
+EMISSIVITY = 1.0
+OCEAN_EMISSIVITY= 0.985
+SNOW_EMISSIVITY = 0.98
+ICE_EMISSIVITY  = 0.98
+
+# FROM MITgcm
+# Freezing temp of fresh water in Kelvin
+TF0KEL = 273.15
+
+# adiabatic lapse rate
+GAMMA_BLK = 0.010
+
+# reference density of air [kg/m^3]
+RHOA = 1.3
+
+# ocean albedo
+OCEAN_ALBEDO = 0.1
+
+# ice albedo
+ICE_ALBEDO = 0.7

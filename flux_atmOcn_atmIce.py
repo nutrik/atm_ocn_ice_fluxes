@@ -462,9 +462,10 @@ def main(itime):
     # Downward LW radiation flux over sea-ice
     lwdw_ice = dw_lw_ice(mask_ice, tbot, tcc)
 
-    # Net surface radiation flux (without short-wave)
-    qnet = swr_net + lwnet_ocn\
-         + lwdw_ice + atmIce_fluxes['lwup']\
+    # Net surface radiation flux
+    qnet = swr_net * (1. - ct.OCEAN_ALBEDO) * mask_ocn_ice\
+         + swr_net * (1. - ct.ICE_ALBEDO) * mask_ice\
+         + lwnet_ocn + lwdw_ice + atmIce_fluxes['lwup']\
          + atmIce_fluxes['sen'] + atmOcn_fluxes['sen']\
          + atmIce_fluxes['lat'] + atmOcn_fluxes['lat']
 
@@ -475,7 +476,7 @@ def main(itime):
 
     # ----------------------------------------------------------------
 
-    output_path = './output' 
+    output_path = './output_cesm' 
     if not os.path.exists(output_path):
         os.mkdir(output_path)
 
@@ -529,9 +530,8 @@ def main(itime):
     plot(qh * mask_ocn, 'sen_simple', cmap='viridis', vmin=-200, vmax=0)
     plot(qe * mask_ocn, 'slhf_simple', cmap='viridis', vmin=-200, vmax=0)
 
-    print(f"Global hflux mean: {np.nanmean(qnet  * mask_ocn)}")
-    #for fld in atmIce_fluxes:
-    #    plot(atmIce_fluxes[fld] + atmOcn_fluxes[fld], fld)
+    plot(atmOcn_fluxes['taux'] * mask_ocn, 'taux', cmap='RdBu_r', vmin=-0.3, vmax=0.3)
+    plot(atmOcn_fluxes['tauy'] * mask_ocn, 'tauy', cmap='RdBu_r', vmin=-0.3, vmax=0.3)
 
 
 if __name__ == "__main__":

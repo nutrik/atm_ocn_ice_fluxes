@@ -99,9 +99,11 @@ def net_lw_ocn(mask, lat, qbot, sst, tbot, tcc):
     """
 
     ccint = np.zeros(lat.shape)
+    idx_num = np.arange(lat.size)
 
     for i in range(20):
-        idx = np.squeeze(np.argwhere((lat[:] > _clat[i]) & (lat[:] <= _clat[i+1])))
+        #idx = np.squeeze(np.argwhere((lat[:] > _clat[i]) & (lat[:] <= _clat[i+1])))
+        idx = np.where((lat[:] > _clat[i]) & (lat[:] <= _clat[i+1]), idx_num, 0) # to make it work with JAX
         ccint[idx] = _cc[i] + (_cc[i+1] - _cc[i])\
                    * (lat[idx] - _clat[i]) / (_clat[i+1] - _clat[i])
 
